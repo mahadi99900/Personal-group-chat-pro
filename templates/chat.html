@@ -1,0 +1,653 @@
+{% extends "base.html" %}
+{% block title %}Private Chating Room{% endblock %}
+{% block extra_css %}
+<style>
+    :root {
+        --bg-dark: #1e1e2f;
+        --bg-light: #27293d;
+        --text-color: #ffffff;
+        --input-bg: #323548;
+        --primary-color: #5d53ff; 
+        --other-bubble: #444964;
+        --self-bubble: #5d53ff;
+        --header-height: 55px;
+        --reply-color: #6c757d; 
+        --system-color: #4a4a4a; 
+    }
+    
+    html, body { 
+        height: 100%; overflow: hidden; background-color: var(--bg-dark);
+        color: var(--text-color); margin: 0; padding: 0;
+    }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    #chat-header {
+        position: fixed; top: 0; left: 0; right: 0; height: var(--header-height); 
+        background-color: var(--bg-light); padding: 0 15px; 
+        display: flex; justify-content: space-between; align-items: center; 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3); z-index: 10;
+    }
+    #input-area { 
+        position: fixed; bottom: 0; left: 0; right: 0;
+        padding: 0 15px 10px 15px;
+        background-color: var(--bg-light); display: flex; flex-direction: column;
+        border-top: 1px solid #333; box-sizing: border-box; z-index: 10;
+    }
+    #input-controls {
+        display: flex; width: 100%; padding: 8px 0; align-items: center;
+    }
+    #message-input { 
+        flex-grow: 1; padding: 12px; border: none; border-radius: 25px; 
+        margin: 0 10px; font-size: 16px; background-color: var(--input-bg);
+        color: var(--text-color);
+    }
+    #send-button { 
+        background-color: var(--primary-color); color: white; border: none; 
+        padding: 10px 15px; border-radius: 50%; min-width: 40px; height: 40px; 
+        font-size: 16px; display: flex; justify-content: center; align-items: center;
+        line-height: 0; 
+    }
+    #chat-window { 
+        position: absolute; top: var(--header-height); left: 0; right: 0;
+        padding: 15px; overflow-y: auto; 
+        background: var(--bg-dark); scroll-behavior: smooth; transition: bottom 0.2s; 
+    }
+    .message-box { 
+        position: relative; margin-bottom: 15px; padding: 0; border-radius: 18px; 
+        max-width: 80%; word-wrap: break-word; 
+        opacity: 0; transform: translateY(20px); transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+    }
+    .message-box.loaded {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .message-box-content {
+        transition: transform 0.3s ease;
+        padding: 10px 15px; 
+        border-radius: 18px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+    .message-box.self .message-box-content { border-bottom-right-radius: 4px; }
+    .message-box.other .message-box-content { border-bottom-left-radius: 4px; }
+    .message-box.self.swiping .message-box-content { transform: translateX(-40px); }
+    .message-box.other.swiping .message-box-content { transform: translateX(40px); }
+    .message-box .swipe-icon {
+        position: absolute; top: 50%; 
+        transform: translateY(-50%); color: var(--primary-color); font-size: 20px;
+        opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    .message-box.self .swipe-icon { left: 10px; right: auto; }
+    .message-box.other .swipe-icon { right: 10px; left: auto; }
+    .message-box.swiping .swipe-icon { opacity: 1; }
+    .message-box.other { margin-right: auto; }
+    .message-box.other .message-box-content { background-color: var(--other-bubble); }
+    .message-box.self { margin-left: auto; }
+    .message-box.self .message-box-content { background-color: var(--self-bubble); }
+    .message-box strong { display: block; font-size: 13px; font-weight: bold; margin-bottom: 3px; color: #ffffff; }
+    .message-box .timestamp { display: block; font-size: 10px; color: #b0b0b0; margin-top: 5px; text-align: right; line-height: 1; }
+    .message-box img { max-width: 100%; height: auto; border-radius: 8px; margin-top: 5px; display: block; }
+    .reply-preview {
+        border-left: 3px solid var(--reply-color); padding-left: 8px; margin-bottom: 5px;
+        background-color: #33364f; padding: 5px; border-radius: 4px; font-size: 12px; 
+        color: #a0a0a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .reply-preview strong { color: #fff; display: inline; margin-right: 5px; }
+    .reactions { display: flex; justify-content: flex-end; margin-top: 5px; }
+    .reaction-badge {
+        background-color: #27293d; border-radius: 15px; padding: 2px 7px; margin-left: 5px;
+        font-size: 12px; display: flex; align-items: center; line-height: 1;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .reaction-emoji { margin-right: 2px; }
+    #reply-bar {
+        width: 100%; padding: 5px 10px; background-color: var(--input-bg);
+        border-top: 1px solid #333; display: none; align-items: center; 
+        justify-content: space-between; color: var(--text-color);
+        border-left: 3px solid var(--primary-color); box-sizing: border-box;
+    }
+    #reply-bar-content { flex-grow: 1; overflow: hidden; white-space: nowrap; }
+    #reply-text { color: var(--reply-color); font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
+    #reply-bar-close { font-size: 24px; font-weight: bold; color: #ff5555; cursor: pointer; padding: 0 10px; margin-left: 10px; }
+    #reaction-menu {
+        position: absolute; background: var(--bg-light); 
+        padding: 8px 15px; border-radius: 30px; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        display: none; align-items: center;
+        z-index: 100; cursor: default;
+    }
+    #reaction-menu span { font-size: 24px; margin: 0 5px; cursor: pointer; }
+    
+    /* FIX: টাইপিং ইন্ডিকেটর স্টাইল */
+    #typing-indicator { 
+        font-size: 14px; color: #aaa; padding: 5px 0; display: none; align-self: flex-start; 
+        height: 20px; 
+    }
+    .typing-dots { display: inline-flex; align-items: center; margin-left: 5px; }
+    .typing-dots span {
+        height: 6px; width: 6px; background-color: #aaa; border-radius: 50%;
+        margin: 0 2px; animation: dot-blink 1s infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dot-blink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+
+    /* FIX: সিস্টেম নোটিফিকেশন স্টাইল */
+    .system-notification {
+        text-align: center;
+        margin: 10px auto;
+        padding: 5px 15px;
+        font-style: italic;
+        font-size: 12px;
+        color: #aaa;
+        background-color: var(--system-color);
+        border-radius: 15px;
+        max-width: 60%;
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div id="chat-header">
+    <h3>Private Chating Room - {{ username }}</h3>
+    <a href="{{ url_for('logout') }}" style="color: #ffcccc;">Logout</a>
+</div>
+
+<div id="chat-window">
+    {% for msg in messages %}
+        {# Initial load of persistent messages #}
+        {% set is_self = msg.user == username %}
+        <div class="message-box {% if is_self %}self{% else %}other{% endif %} loaded" 
+             data-id="{{ msg.id }}" 
+             data-user="{{ msg.user }}"
+             data-content="{{ msg.message or (msg.image_path and 'Image attached') or '...' }}">
+            <div class="message-box-content">
+                {% if msg.reply_to_user and msg.reply_to_content %}
+                    {# CORRECTED: Jinja2 ternary operator: (value_if_true) if (condition) else (value_if_false) #}
+                    {% set display_content = (msg.reply_to_content[:30] ~ '...') if (msg.reply_to_content|length > 30) else msg.reply_to_content %}
+                    <div class="reply-preview">
+                        <strong>Replying to {{ msg.reply_to_user }}</strong>
+                        {{ display_content }}
+                    </div>
+                {% endif %}
+                <strong>{{ msg.user }}</strong>
+                {% if msg.image_path %}
+                    <img src="/uploads/{{ msg.image_path }}" alt="Image attachment" onerror="this.style.display='none';">
+                {% endif %}
+                {{ msg.message or '' }}
+                <span class="timestamp">{{ msg.time }}</span>
+            </div>
+            <div class="reactions">
+                <span id="reactions-{{ msg.id }}">
+                    {# Reactions will be rendered by JS on DOMContentLoaded #}
+                </span>
+            </div>
+            <span class="swipe-icon">↩️</span>
+        </div>
+    {% endfor %}
+</div>
+
+<div id="input-area">
+    <div id="reply-bar">
+        <div id="reply-bar-content">
+            <strong>Replying to: </strong>
+            <span id="reply-user"></span>
+            <div id="reply-text"></div>
+        </div>
+        <span id="reply-bar-close">X</span>
+    </div>
+
+    <div id="typing-indicator">
+        <span id="typing-users"></span> is typing
+        <div class="typing-dots">
+            <span></span><span></span><span></span>
+        </div>
+    </div>
+
+    <div id="input-controls">
+        <button onclick="document.getElementById('image-upload').click()">🖼️</button>
+        <input type="file" id="image-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event)">
+        
+        <input type="text" id="message-input" placeholder="Type your message..." autofocus>
+        <button id="send-button">🚀</button>
+    </div>
+</div>
+
+<div id="reaction-menu">
+    <span data-type="like" onclick="sendReaction(window.currentMsgId, 'like')">👍</span>
+    <span data-type="heart" onclick="sendReaction(window.currentMsgId, 'heart')">❤️</span>
+    <span data-type="smile" onclick="sendReaction(window.currentMsgId, 'smile')">🙂</span>
+    <span data-type="cool" onclick="sendReaction(window.currentMsgId, 'cool')">😎</span>
+    <span data-type="cry" onclick="sendReaction(window.currentMsgId, 'cry')">🥺</span>
+    <span data-type="laugh" onclick="sendReaction(window.currentMsgId, 'laugh')">🤣</span>
+    <span data-type="dislike" onclick="sendReaction(window.currentMsgId, 'dislike')">👎</span>
+    <span data-type="hug" onclick="sendReaction(window.currentMsgId, 'hug')">🥰</span>
+</div>
+
+<script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script> 
+
+<script>
+    // FIX: SocketIO পুনরুদ্ধার
+    const socket = io(); 
+    const chatWindow = document.getElementById('chat-window');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+    const replyBar = document.getElementById('reply-bar');
+    const replyBarClose = document.getElementById('reply-bar-close');
+    const reactionMenu = document.getElementById('reaction-menu');
+    const typingIndicator = document.getElementById('typing-indicator'); 
+    const typingUsersSpan = document.getElementById('typing-users');
+    
+    let replyToMsgId = null; 
+    window.currentMsgId = null; 
+    const CURRENT_USER = "{{ username }}"; 
+    
+    // FIX: Message tracking - Initial load এর জন্য দরকার
+    let messageCache = {}; 
+    document.querySelectorAll('.message-box').forEach(msgBox => {
+        messageCache[msgBox.dataset.id] = true;
+    });
+
+    // --- Utility Functions ---
+    let isScrolledToBottom = true;
+    function scrollToBottom() {
+        if (isScrolledToBottom) {
+             chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+    }
+    chatWindow.addEventListener('scroll', () => {
+        const threshold = 100; 
+        isScrolledToBottom = chatWindow.scrollHeight - chatWindow.clientHeight <= chatWindow.scrollTop + threshold;
+    });
+    
+    function updateChatWindowHeight() {
+        const inputArea = document.getElementById('input-area');
+        const inputAreaHeight = inputArea.offsetHeight;
+        chatWindow.style.bottom = `${inputAreaHeight + 5}px`; 
+        scrollToBottom(); 
+    }
+    window.updateChatWindowHeight = updateChatWindowHeight; 
+    
+    function clearReplyContext() {
+        replyToMsgId = null;
+        replyBar.style.display = 'none';
+        messageInput.placeholder = "Type your message...";
+        updateChatWindowHeight(); 
+    }
+    window.clearReplyContext = clearReplyContext;
+    replyBarClose.addEventListener('click', clearReplyContext);
+
+    function setReplyContext(msgId, msgUser, msgContent) {
+        replyToMsgId = msgId;
+        document.getElementById('reply-user').textContent = msgUser;
+        document.getElementById('reply-text').textContent = msgContent.length > 50 ? msgContent.substring(0, 50) + '...' : msgContent;
+        replyBar.style.display = 'flex';
+        messageInput.placeholder = "Replying...";
+        updateChatWindowHeight();
+        messageInput.focus();
+    }
+    
+    function setupSwipeToReply(msgBox) {
+        let startX = 0;
+        let diffX = 0;
+        const swipeThreshold = 50; 
+        const content = msgBox.querySelector('.message-box-content');
+        const isSelf = msgBox.classList.contains('self');
+        
+        let msgContent = msgBox.dataset.content; 
+        if (!msgBox.querySelector('.reply-preview') && !msgContent && msgBox.querySelector('img')) {
+            msgContent = 'Image attached';
+        }
+        
+        msgBox.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 1) return; 
+            startX = e.touches[0].clientX;
+            diffX = 0;
+            content.style.transition = 'none'; 
+            msgBox.classList.remove('swiping');
+        });
+
+        msgBox.addEventListener('touchmove', (e) => {
+            diffX = e.touches[0].clientX - startX;
+            let absDiff = Math.abs(diffX);
+            
+            if ((isSelf && diffX < 0) || (!isSelf && diffX > 0)) {
+                content.style.transform = `translateX(${isSelf ? -absDiff : absDiff}px)`;
+                if (absDiff > swipeThreshold / 2) {
+                    msgBox.classList.add('swiping');
+                } else {
+                    msgBox.classList.remove('swiping');
+                }
+            } else {
+                content.style.transform = 'translateX(0)';
+                msgBox.classList.remove('swiping');
+            }
+        });
+
+        msgBox.addEventListener('touchend', () => {
+            content.style.transition = 'transform 0.3s ease'; 
+            msgBox.classList.remove('swiping');
+            
+            if (Math.abs(diffX) > swipeThreshold) {
+                const msgId = msgBox.dataset.id;
+                const msgUser = msgBox.dataset.user;
+                setReplyContext(msgId, msgUser, msgContent); 
+            }
+            
+            content.style.transform = 'translateX(0)';
+            startX = 0;
+            diffX = 0;
+        });
+    }
+    document.querySelectorAll('.message-box').forEach(setupSwipeToReply);
+    
+    // --- Core RENDER Functions ---
+    
+    function renderSystemNotification(msg) {
+        const notificationBox = document.createElement('div');
+        notificationBox.classList.add('system-notification');
+        notificationBox.textContent = msg.message;
+        
+        chatWindow.appendChild(notificationBox);
+        scrollToBottom();
+    }
+    
+    function renderMessage(msg) {
+        if (!msg || !msg.id || !msg.user) return;
+        
+        // Handle system messages
+        if (msg.system_notification) {
+             renderSystemNotification(msg);
+             return;
+        }
+
+        // Skip if message already rendered from initial load
+        if (messageCache[msg.id]) {
+            renderReactions(msg.id, msg.reactions);
+            return;
+        }
+
+        const msgBox = document.createElement('div');
+        msgBox.classList.add('message-box');
+        const isSelf = msg.user === CURRENT_USER;
+        msgBox.classList.add(isSelf ? 'self' : 'other');
+        msgBox.dataset.id = msg.id;
+        msgBox.dataset.user = msg.user; 
+        msgBox.dataset.content = msg.message || (msg.image_path ? 'Image attached' : '...');
+
+        let replyHtml = '';
+        if (msg.reply_to_user && msg.reply_to_content) {
+            const displayContent = msg.reply_to_content.length > 30 ? msg.reply_to_content.substring(0, 30) + '...' : msg.reply_to_content;
+            replyHtml = `
+                <div class="reply-preview">
+                    <strong>Replying to ${msg.reply_to_user}</strong>
+                    ${displayContent}
+                </div>
+            `;
+        }
+        
+        const imageUrl = msg.image_path ? `/uploads/${msg.image_path}` : null;
+        const imageHtml = imageUrl ? `<img src="${imageUrl}" alt="Image attachment" onerror="this.style.display='none';">` : ''; 
+
+        msgBox.innerHTML = `
+            <div class="message-box-content">
+                ${replyHtml}
+                <strong>${msg.user}</strong>
+                ${imageHtml}
+                ${msg.message || ''}
+                <span class="timestamp">${msg.time}</span>
+            </div>
+            <div class="reactions">
+                <span id="reactions-${msg.id}"></span>
+            </div>
+            <span class="swipe-icon">↩️</span>
+        `;
+        
+        chatWindow.appendChild(msgBox); 
+        
+        setTimeout(() => msgBox.classList.add('loaded'), 50);
+        
+        setupReactionListeners(msgBox, msg.id); 
+        setupSwipeToReply(msgBox); 
+        
+        renderReactions(msg.id, msg.reactions);
+        messageCache[msg.id] = true; 
+
+        scrollToBottom();
+    }
+
+    // --- Message Send Handler (SocketIO) ---
+    function sendMessageHandler() {
+        const message = messageInput.value.trim();
+        const fileInput = document.getElementById('image-upload');
+        const hasFile = fileInput.files.length > 0;
+
+        if (hasFile) {
+            handleImageUpload({ target: fileInput });
+        } else if (message) {
+            socket.emit('send_message', { 
+                message: message, 
+                reply_to_id: replyToMsgId 
+            });
+            messageInput.value = '';
+            clearReplyContext();
+        }
+    }
+    sendButton.addEventListener('click', sendMessageHandler);
+    messageInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') { sendMessageHandler(); e.preventDefault(); }
+    });
+
+
+    // --- Image Upload Logic (SocketIO) ---
+    function handleImageUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const caption = messageInput.value.trim() || ""; 
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            socket.emit('upload_file', {
+                file_data: e.target.result,
+                caption: caption,
+                reply_to_id: replyToMsgId
+            });
+
+            event.target.value = ''; 
+            messageInput.value = ''; 
+            clearReplyContext(); 
+        };
+        reader.readAsDataURL(file);
+    }
+    window.handleImageUpload = handleImageUpload;
+
+    // --- Reaction Logic Functions (SocketIO) ---
+    
+    // **FINAL FIX: অন্যের মেসেজে রিয়্যাকশন ট্রিগার করার জন্য লজিক সংশোধন**
+    function setupReactionListeners(msgBox, msgId) {
+        // ডাবল ক্লিক লিসেনার
+        msgBox.addEventListener('dblclick', function(e) {
+            // ডাবল ক্লিক শুধুমাত্র মেসেজ বাবল কন্টেন্টের উপর কাজ করবে
+            if (e.target.closest('.message-box-content')) {
+                e.preventDefault(); 
+                showReactionMenu(msgBox, msgId);
+            }
+        });
+
+        // লং প্রেস লিসেনার
+        let pressTimer;
+        msgBox.addEventListener('touchstart', (e) => {
+            // নিশ্চিত করুন যে এটি মেসেজ কন্টেন্টের উপর টাচ হয়েছে এবং শুধুমাত্র একটি আঙুল ব্যবহার করা হচ্ছে
+            if (e.touches.length > 1 || !e.target.closest('.message-box-content')) return;
+            
+            // যদি এটি রিপ্লাই সোয়াইপ মোডে থাকে, তাহলে লং প্রেস বন্ধ করুন।
+            if (msgBox.classList.contains('swiping')) return; 
+
+            pressTimer = setTimeout(() => {
+                showReactionMenu(msgBox, msgId);
+            }, 700); // 700ms লং প্রেস
+        }, false);
+
+        msgBox.addEventListener('touchend', () => {
+            clearTimeout(pressTimer);
+        });
+        
+        // টাচ মুভ হলে বা স্ক্রল হলে লং প্রেস বাতিল
+        msgBox.addEventListener('touchmove', () => {
+            clearTimeout(pressTimer);
+        });
+    }
+    
+    function showReactionMenu(msgBox, msgId) {
+        window.currentMsgId = msgId; 
+        const rect = msgBox.getBoundingClientRect();
+        const chatWindowRect = chatWindow.getBoundingClientRect();
+        
+        const menuHeight = 50; 
+        const menuWidth = 350;
+
+        let topPos = rect.top - menuHeight - 5;
+        
+        if (topPos < chatWindowRect.top) {
+            topPos = rect.bottom + 5; 
+        }
+
+        let leftPos = rect.left + (rect.width / 2) - (menuWidth / 2);
+        
+        leftPos = Math.max(chatWindowRect.left + 10, leftPos); 
+        leftPos = Math.min(leftPos, chatWindowRect.right - menuWidth - 10); 
+
+        reactionMenu.style.top = `${topPos}px`;
+        reactionMenu.style.left = `${leftPos}px`;
+        reactionMenu.style.display = 'flex';
+        reactionMenu.style.width = `${menuWidth}px`;
+    }
+    
+    function getEmoji(type) {
+        if (type === 'like') return '👍';
+        if (type === 'heart') return '❤️';
+        if (type === 'smile') return '🙂';
+        if (type === 'cool') return '😎';
+        if (type === 'cry') return '🥺';
+        if (type === 'laugh') return '🤣';
+        if (type === 'dislike') return '👎';
+        if (type === 'hug') return '🥰';
+        return type;
+    }
+
+    function renderReactions(msgId, reactionsData) {
+        let reactionsElement = document.getElementById(`reactions-${msgId}`);
+        if (!reactionsElement) return;
+
+        let reactionsDict = reactionsData || {};
+
+        let html = '';
+        for (const [type, count] of Object.entries(reactionsDict)) {
+            const actualCount = count.count !== undefined ? count.count : count; 
+            if (actualCount > 0) {
+                html += `<span class="reaction-badge"><span class="reaction-emoji">${getEmoji(type)}</span> ${actualCount}</span>`;
+            }
+        }
+        reactionsElement.innerHTML = html;
+        if (html.trim().length > 0) {
+            reactionsElement.style.display = 'flex';
+        } else {
+            reactionsElement.style.display = 'none';
+        }
+    }
+
+    function sendReaction(msgId, reactionType) {
+        socket.emit('react', { msg_id: msgId, reaction_type: reactionType });
+        reactionMenu.style.display = 'none';
+    }
+    window.sendReaction = sendReaction; 
+
+    // --- CORE SOCKETIO HANDLERS ---
+    
+    // নতুন মেসেজ পেলে রেন্ডার
+    socket.on('new_message', function(msg) {
+        renderMessage(msg);
+    });
+
+    // রিয়াকশন আপডেট হলে রেন্ডার
+    socket.on('reaction_update', function(data) {
+        const msgBox = document.querySelector(`.message-box[data-id="${data.msg_id}"]`);
+        if (msgBox) {
+            renderReactions(data.msg_id, data.reactions);
+        }
+    });
+
+    // ইউজার জয়েনিং/লিভিং নোটিফিকেশন
+    socket.on('user_joined', function(msg) {
+        renderSystemNotification(msg);
+    });
+    socket.on('user_left', function(msg) {
+        renderSystemNotification(msg);
+    });
+    
+    // --- TYPING INDICATOR LOGIC (Client-side) ---
+    
+    let typingUsers = {};
+    let typingTimeout;
+
+    // Send typing status when key is pressed
+    messageInput.addEventListener('input', function() {
+        if (!typingTimeout) {
+            socket.emit('typing', { is_typing: true });
+        }
+        
+        clearTimeout(typingTimeout);
+        
+        typingTimeout = setTimeout(() => {
+            socket.emit('typing', { is_typing: false });
+            typingTimeout = null;
+        }, 2000);
+    });
+
+    // Receive typing status
+    socket.on('typing_status', function(data) {
+        if (data.user !== CURRENT_USER) {
+            if (data.is_typing) {
+                typingUsers[data.user] = true;
+            } else {
+                delete typingUsers[data.user];
+            }
+            updateTypingIndicator();
+        }
+    });
+
+    function updateTypingIndicator() {
+        const users = Object.keys(typingUsers);
+        if (users.length > 0) {
+            const displayUsers = users.slice(0, 2).join(', ');
+            typingUsersSpan.textContent = displayUsers + (users.length > 2 ? ' and others' : '');
+            typingIndicator.style.display = 'flex';
+            scrollToBottom();
+        } else {
+            typingIndicator.style.display = 'none';
+        }
+        updateChatWindowHeight(); 
+    }
+
+    // --- Initial Setup ---
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initial setup for messages loaded via Flask
+        document.querySelectorAll('.message-box').forEach(msgBox => {
+            setupReactionListeners(msgBox, msgBox.dataset.id); 
+        });
+        
+        clearReplyContext(); 
+        window.addEventListener('resize', updateChatWindowHeight);
+        
+        document.addEventListener('click', function(e) {
+            if (reactionMenu.style.display === 'flex' && !e.target.closest('#reaction-menu') && !e.target.closest('.message-box')) {
+                reactionMenu.style.display = 'none';
+            }
+        });
+        
+        scrollToBottom();
+        updateChatWindowHeight(); 
+    });
+</script>
+{% endblock %}
