@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Login - Private Chating Room{% endblock %}
+{% block extra_css %}
+<style>
+    /* Dark Theme Variables for Login */
+    :root {
+        --bg-dark: #1e1e2f;
+        --bg-light: #27293d;
+        --text-color: #ffffff;
+        --input-bg: #323548;
+        --primary-color: #5d53ff; 
+        --box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    body { 
+        /* FIX: Ensures the box is centered both horizontally and vertically */
+        display: flex; 
+        justify-content: center; /* Center horizontally */
+        align-items: center;    /* Center vertically */
+        min-height: 100vh; 
+        background-color: var(--bg-dark); 
+        font-family: Arial, sans-serif;
+        padding: 20px; /* Padding around the body for safety */
+    }
+    .login-box { 
+        background: var(--bg-light); 
+        padding: 40px 25px; 
+        border-radius: 12px; 
+        box-shadow: var(--box-shadow); 
+        width: 100%; /* FIX: Use 100% width up to max-width */
+        max-width: 400px; 
+        text-align: center;
+        /* margin: auto; is covered by flexbox centering */
+    }
+    .login-box h2 {
+        color: var(--primary-color); 
+        margin-bottom: 30px; 
+        font-size: 26px;
+        font-weight: bold;
+    }
+    input[type="text"], input[type="password"] { 
+        width: 100%; padding: 14px 16px; margin: 8px 0; box-sizing: border-box; 
+        border: 1px solid #444964; border-radius: 8px; font-size: 16px;
+        background-color: var(--input-bg);
+        color: var(--text-color);
+    }
+    input[type="text"]::placeholder, input[type="password"]::placeholder {
+        color: #999;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 1px var(--primary-color);
+        outline: none;
+    }
+    button { 
+        background-color: var(--primary-color); color: white; padding: 14px 16px; border: none; 
+        border-radius: 8px; cursor: pointer; width: 100%; margin-top: 20px; 
+        font-size: 18px; font-weight: bold; transition: background-color 0.3s, transform 0.2s;
+    }
+    button:hover {
+        background-color: #4a42e5;
+        transform: translateY(-1px);
+    }
+    .flash { 
+        background-color: #ffcccc22; color: #ff5555; padding: 10px; border-radius: 6px; 
+        margin-bottom: 15px; border: 1px solid #ff555544; font-weight: normal;
+    }
+    .info-text {
+        margin-top: 25px; 
+        font-size: 14px; 
+        color: #bbb;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div class="login-box">
+    <h2>Private Chating Room</h2>
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="flash">
+                {{ messages[0] }}
+            </div>
+        {% endif %}
+    {% endwith %}
+    
+    <form method="POST">
+        <input type="text" id="username" name="username" placeholder="Enter Your Username" required>
+        <input type="password" id="password" name="password" placeholder="Enter Group Password" required>
+        
+        <button type="submit">Log In</button>
+    </form>
+    
+    <p class="info-text">Access requires a valid group password.</p>
+</div>
+{% endblock %}
